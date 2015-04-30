@@ -121,6 +121,7 @@ trait RevisionableTrait
                     'key'                   => $key,
                     'old_value'             => array_get($this->originalData, $key),
                     'new_value'             => $this->updatedData[$key],
+                    'user_type'             => $this->getUserType(),
                     'user_id'               => $this->getUserId(),
                     'created_at'            => new \DateTime(),
                     'updated_at'            => new \DateTime(),
@@ -151,6 +152,7 @@ trait RevisionableTrait
                 'key' => 'deleted_at',
                 'old_value' => null,
                 'new_value' => $this->deleted_at,
+                'user_type' => $this->getUserType(),
                 'user_id' => $this->getUserId(),
                 'created_at' => new \DateTime(),
                 'updated_at' => new \DateTime(),
@@ -163,11 +165,45 @@ trait RevisionableTrait
     /**
      * Attempt to find the user id of the currently logged in user
      * Supports Cartalyst Sentry/Sentinel based authentication, as well as stock Auth
+     * MultiAuth support added
      **/
     private function getUserId()
     {
         try {
-            if (class_exists($class = '\Cartalyst\Sentry\Facades\Laravel\Sentry')
+            if ( !is_null($multi = app('config')->get('auth.multi')) ) {
+                foreach ($multi as $user_type => $value) {
+                    if ( \Auth::$user_type()->check() ) {
+                        return \Auth::$user_type()->get()->getAuthIdentifier();
+                    }
+                }
+            } elseif (class_exists($class = '\Cartalyst\Sentry\Facades\Laravel\Sentry')
+                    || class_exists($class = '\Cartalyst\Sentinel\Laravel\Facades\Sentinel')) {
+                return ($class::check()) ? $class::getUser()->id : null;
+            } elseif (\Auth::check()) {
+                return \Auth::user()->getAuthIdentifier();
+            }
+        } catch (\Exception $e) {
+            return null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Attempt to find the user type of the currently logged in user
+     * Supports Cartalyst Sentry/Sentinel based authentication, as well as stock Auth
+     * MultiAuth support added
+     **/
+    private function getUserType()
+    {
+        try {
+            if ( !is_null($multi = app('config')->get('auth.multi')) ) {
+                foreach ($multi as $user_type => $value) {
+                    if ( \Auth::$user_type()->check() ) {
+                        return $user_type;
+                    }
+                }
+            } elseif (class_exists($class = '\Cartalyst\Sentry\Facades\Laravel\Sentry')
                     || class_exists($class = '\Cartalyst\Sentinel\Laravel\Facades\Sentinel')) {
                 return ($class::check()) ? $class::getUser()->id : null;
             } elseif (\Auth::check()) {

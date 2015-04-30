@@ -177,7 +177,10 @@ class Revision extends Eloquent
      */
     public function userResponsible()
     {
-        if (class_exists($class = '\Cartalyst\Sentry\Facades\Laravel\Sentry')
+        if ( !is_null($multi = app('config')->get('auth.multi')) ) {
+            $user_model = $multi[$this->user_type]['model'];
+            return $user_model::find($this->user_id);
+        } elseif (class_exists($class = '\Cartalyst\Sentry\Facades\Laravel\Sentry')
                 || class_exists($class = '\Cartalyst\Sentinel\Laravel\Facades\Sentinel')) {
             return $class::findUserById($this->user_id);
         } else {
