@@ -31,10 +31,8 @@ class Revisionable extends Eloquent
      * http method.
      *
      */
-    public static function boot()
+    public static function bootRevisionableTrait()
     {
-        parent::boot();
-
         static::saving(function ($model) {
             $model->preSave();
         });
@@ -48,6 +46,16 @@ class Revisionable extends Eloquent
             $model->postDelete();
         });
 
+    }
+
+    public static function boot()
+    {
+        parent::boot();
+        // This allows versions of Laravel before 4.2 to use the
+        // trait while still having boot methods in the model class.
+        if (! method_exists(get_called_class(), 'bootTraits')) {
+            static::bootRevisionableTrait();
+        }
     }
 
     public function revisionHistory()
