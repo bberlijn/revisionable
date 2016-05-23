@@ -187,8 +187,10 @@ trait RevisionableTrait
             } elseif (class_exists($class = '\Cartalyst\Sentry\Facades\Laravel\Sentry')
                     || class_exists($class = '\Cartalyst\Sentinel\Laravel\Facades\Sentinel')) {
                 return ($class::check()) ? $class::getUser()->id : null;
-            } elseif (\Auth::check()) {
-                return \Auth::user()->getAuthIdentifier();
+            } elseif (\Auth::guard('user')->check()) {
+                return \Auth::guard('user')->user()->getAuthIdentifier();
+            } elseif (\Auth::guard('customer')->check()) {
+                return \Auth::guard('customer')->user()->getAuthIdentifier();
             }
         } catch (\Exception $e) {
             return null;
@@ -214,8 +216,10 @@ trait RevisionableTrait
             } elseif (class_exists($class = '\Cartalyst\Sentry\Facades\Laravel\Sentry')
                     || class_exists($class = '\Cartalyst\Sentinel\Laravel\Facades\Sentinel')) {
                 return ($class::check()) ? $class::getUser()->id : null;
-            } elseif (\Auth::check()) {
-                return \Auth::user()->getAuthIdentifier();
+            } elseif (\Auth::guard('user')->check()) {
+                return get_class(\Auth::guard('user')->user());
+            } elseif (\Auth::guard('customer')->check()) {
+                return get_class(\Auth::guard('customer')->user());
             }
         } catch (\Exception $e) {
             return null;
