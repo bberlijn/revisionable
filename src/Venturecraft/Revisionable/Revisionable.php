@@ -1,8 +1,6 @@
-<?php
+<?php namespace Venturecraft\Revisionable;
 
-namespace Venturecraft\Revisionable;
-
-use Venturecraft\Revisionable\Traits\PivotEventTrait;
+use Illuminate\Database\Eloquent\Model as Eloquent;
 
 /*
  * This file is part of the Revisionable package by Venture Craft
@@ -11,27 +9,26 @@ use Venturecraft\Revisionable\Traits\PivotEventTrait;
  *
  */
 
-trait RevisionableTrait
+class Revisionable extends Eloquent
 {
-    use PivotEventTrait;
-
     private $originalData;
     private $updatedData;
     private $updating;
-    private $dontKeep = [];
-    private $doKeep = [];
+    private $dontKeep = array();
+    private $doKeep = array();
 
     /**
      * Keeps the list of values that have been updated
      *
      * @var array
      */
-    protected $dirtyData = [];
+    protected $dirtyData = array();
 
     /**
      * Create the event listeners for the saving and saved events
      * This lets us save revisions whenever a save is made, no matter the
      * http method.
+     *
      */
     public static function bootRevisionableTrait()
     {
@@ -47,14 +44,16 @@ trait RevisionableTrait
             $model->preSave();
             $model->postDelete();
         });
+    }
 
-        static::created(function ($model) {
-            $model->postCreate();
-        });
-
-        static::pivotUpdated(function ($model, $relation, $attributes) {
-            $model->postPivotUpdated($model, $relation, $attributes);
-        });
+    public static function boot()
+    {
+        parent::boot();
+        // This allows versions of Laravel before 4.2 to use the
+        // trait while still having boot methods in the model class.
+        if (! method_exists(get_called_class(), 'bootTraits')) {
+            static::bootRevisionableTrait();
+        }
     }
 
     public function revisionHistory()
@@ -110,64 +109,48 @@ trait RevisionableTrait
      */
     public function postSave()
     {
+
         // check if the model already exists
         if ((!isset($this->revisionEnabled) || $this->revisionEnabled) && $this->updating) {
             // if it does, it means we're updating
 
             $changes_to_record = $this->changedRevisionableFields();
 
-            $revisions = [];
+            $revisions = array();
 
             foreach ($changes_to_record as $key => $change) {
-                $revisions[] = [
+                $revisions[] = array(
                     'revisionable_type' => $this->getMorphClass(),
                     'revisionable_id'   => $this->getKey(),
                     'key'               => $key,
                     'old_value'         => array_get($this->originalData, $key),
                     'new_value'         => $this->updatedData[$key],
-                    'user_type'         => $this->getUserType(),
                     'user_id'           => $this->getSystemUserId(),
-                    'created_at'        => now(),
-                    'updated_at'        => now(),
-                ];
+                    'created_at'        => new \DateTime(),
+                    'updated_at'        => new \DateTime(),
+                );
             }
 
             if (count($revisions) > 0) {
                 $revision = new Revision;
                 \DB::table($revision->getTable())->insert($revisions);
-                \Event::fire('revisionable.saved', array('model' => $this, 'revisions' => $revisions));
             }
-        }
-    }
-
-    /**
-    * Called after record successfully created
-    */
-    public function postCreate()
-    {
-        // Check if we should store creations in our revision history
-        // Set this value to true in your model if you want to
-        if (empty($this->revisionCreationsEnabled)) {
-            // We should not store creations.
-            return false;
         }
 
         if ((!isset($this->revisionEnabled) || $this->revisionEnabled)) {
-            $revisions[] = [
+            $revisions[] = array(
                 'revisionable_type' => $this->getMorphClass(),
                 'revisionable_id'   => $this->getKey(),
                 'key'               => self::CREATED_AT,
                 'old_value'         => null,
                 'new_value'         => $this->{self::CREATED_AT},
-                'user_type'         => $this->getUserType(),
                 'user_id'           => $this->getSystemUserId(),
-                'created_at'        => now(),
-                'updated_at'        => now(),
-            ];
+                'created_at'        => new \DateTime(),
+                'updated_at'        => new \DateTime(),
+            );
 
             $revision = new Revision;
             \DB::table($revision->getTable())->insert($revisions);
-            \Event::fire('revisionable.created', array('model' => $this, 'revisions' => $revisions));
         }
     }
 
@@ -178,132 +161,34 @@ trait RevisionableTrait
     {
         if ((!isset($this->revisionEnabled) || $this->revisionEnabled)
             && $this->isSoftDelete()
-            && $this->isRevisionable($this->getDeletedAtColumn())
-        ) {
-            $revisions[] = [
+            && $this->isRevisionable($this->getDeletedAtColumn())) {
+            $revisions[] = array(
                 'revisionable_type' => $this->getMorphClass(),
                 'revisionable_id'   => $this->getKey(),
                 'key'               => $this->getDeletedAtColumn(),
                 'old_value'         => null,
                 'new_value'         => $this->{$this->getDeletedAtColumn()},
-                'user_type'         => $this->getUserType(),
                 'user_id'           => $this->getSystemUserId(),
-                'created_at'        => now(),
-                'updated_at'        => now(),
-            ];
+                'created_at'        => new \DateTime(),
+                'updated_at'        => new \DateTime(),
+            );
             $revision = new \Venturecraft\Revisionable\Revision;
             \DB::table($revision->getTable())->insert($revisions);
-            \Event::fire('revisionable.deleted', array('model' => $this, 'revisions' => $revisions));
-        }
-    }
-
-    /**
-     * @todo - Cast booleans to integer
-     *       - Better name for $relation variable
-     * @param  [type] $model      [description]
-     * @param  [type] $relation   [description]
-     * @param  array  $attributes [description]
-     * @return [type]             [description]
-     */
-    public function postPivotUpdated(
-        $model,
-        $relation = null,
-        $attributes = []
-    ) {
-        $relationName = $relation->getRelationName();
-        $relatedKey = $relation->getRelated()->getKeyName();
-        $relation_id = array_keys($attributes)[0];
-        $attributes = array_values($attributes)[0];
-
-        if (!isset($this->revisionEnabled) || $this->revisionEnabled) {
-            $revisions = [];
-
-            $originalData = $this->$relationName->firstWhere($relatedKey, $relation_id)->pivot->toArray();
-
-            $parent = get_class($this);
-            $parent_id = $this->id;
-            $relation = get_class($relation->getRelated());
-            $relation_id = $relation_id;
-
-            if (strpos($this->getTable(), $relationName) !== false) {
-                $parent = get_class($relation->getRelated());
-                $parent_id = $relation_id;
-                $relation = get_class($this);
-                $relation_id = $this->id;
-            }
-
-            foreach ($attributes as $key => $value) {
-                if ($originalData[$key] === $value) {
-                    continue;
-                }
-
-                $revisions[] = [
-                    'parent_type'       => $parent,
-                    'parent_id'         => $parent_id,
-                    'revisionable_type' => $relation,
-                    'revisionable_id'   => $relation_id,
-                    'key'               => $key,
-                    'old_value'         => array_get($originalData, $key),
-                    'new_value'         => $value,
-                    'user_type'         => $this->getUserType(),
-                    'user_id'           => $this->getSystemUserId(),
-                    'created_at'        => now(),
-                    'updated_at'        => now(),
-                ];
-            }
-
-            if (count($revisions) > 0) {
-                $revision = new Revision;
-                \DB::table($revision->getTable())->insert($revisions);
-                \Event::fire('revisionable.saved', array('model' => $this, 'revisions' => $revisions));
-            }
         }
     }
 
     /**
      * Attempt to find the user id of the currently logged in user
      * Supports Cartalyst Sentry/Sentinel based authentication, as well as stock Auth
-     * MultiAuth support added
      **/
-    public function getSystemUserId()
+    private function getSystemUserId()
     {
         try {
-            if (!is_null($multi = app('config')->get('auth.multi'))) {
-                foreach ($multi as $user_type => $value) {
-                    if (\Auth::$user_type()->check()) {
-                        return \Auth::$user_type()->get()->getAuthIdentifier();
-                    }
-                }
-            } elseif (\Auth::guard('user')->check()) {
-                return \Auth::guard('user')->user()->getAuthIdentifier();
-            } elseif (\Auth::guard('customer')->check()) {
-                return \Auth::guard('customer')->user()->getAuthIdentifier();
-            }
-        } catch (\Exception $e) {
-            return null;
-        }
-
-        return null;
-    }
-
-    /**
-     * Attempt to find the user type of the currently logged in user
-     * Supports Cartalyst Sentry/Sentinel based authentication, as well as stock Auth
-     * MultiAuth support added
-     **/
-    private function getUserType()
-    {
-        try {
-            if (!is_null($multi = app('config')->get('auth.multi'))) {
-                foreach ($multi as $user_type => $value) {
-                    if (\Auth::$user_type()->check()) {
-                        return $user_type;
-                    }
-                }
-            } elseif (\Auth::guard('user')->check()) {
-                return get_class(\Auth::guard('user')->user());
-            } elseif (\Auth::guard('customer')->check()) {
-                return get_class(\Auth::guard('customer')->user());
+            if (class_exists($class = '\Cartalyst\Sentry\Facades\Laravel\Sentry')
+                    || class_exists($class = '\Cartalyst\Sentinel\Laravel\Facades\Sentinel')) {
+                return ($class::check()) ? $class::getUser()->id : null;
+            } elseif (\Auth::check()) {
+                return \Auth::user()->getAuthIdentifier();
             }
         } catch (\Exception $e) {
             return null;
@@ -320,12 +205,12 @@ trait RevisionableTrait
      */
     private function changedRevisionableFields()
     {
-        $changes_to_record = [];
+        $changes_to_record = array();
         foreach ($this->dirtyData as $key => $value) {
             // check that the field is revisionable, and double check
             // that it's actually new data in case dirty is, well, clean
             if ($this->isRevisionable($key) && !is_array($value)) {
-                if (!array_key_exists($key, $this->originalData) || $this->originalData[$key] != $this->updatedData[$key]) {
+                if (!isset($this->originalData[$key]) || $this->originalData[$key] != $this->updatedData[$key]) {
                     $changes_to_record[$key] = $value;
                 }
             } else {
@@ -412,7 +297,6 @@ trait RevisionableTrait
      * instead of displaying the ID, you can choose to display a string
      * of your choice, just override this method in your model
      * By default, it will fall back to the models ID.
-     *
      * @return string an identifying name for the model
      */
     public function getRevisionNullString()
@@ -444,7 +328,7 @@ trait RevisionableTrait
     public function disableRevisionField($field)
     {
         if (!isset($this->dontKeepRevisionOf)) {
-            $this->dontKeepRevisionOf = [];
+            $this->dontKeepRevisionOf = array();
         }
         if (is_array($field)) {
             foreach ($field as $one_field) {
