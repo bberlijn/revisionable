@@ -9,7 +9,6 @@
 
 trait RevisionableTrait
 {
-
     private $originalData;
     private $updatedData;
     private $updating;
@@ -22,6 +21,13 @@ trait RevisionableTrait
      * @var array
      */
     protected $dirtyData = array();
+
+    /**
+     * Store model creation by default
+     *
+     * @var boolean
+     */
+    protected $revisionCreationsEnabled = true;
 
     /**
      * Create the event listeners for the saving and saved events
@@ -44,7 +50,7 @@ trait RevisionableTrait
             $model->postDelete();
         });
 
-        static::created(function($model){
+        static::created(function ($model) {
             $model->postCreate();
         });
     }
@@ -71,7 +77,6 @@ trait RevisionableTrait
      */
     public function preSave()
     {
-
         if (!isset($this->revisionEnabled) || $this->revisionEnabled) {
             // if there's no revisionEnabled. Or if there is, if it's true
 
@@ -102,9 +107,7 @@ trait RevisionableTrait
 
             $this->dirtyData = $this->getDirty();
             $this->updating = $this->exists;
-
         }
-
     }
 
 
@@ -125,19 +128,17 @@ trait RevisionableTrait
             $revisions = array();
 
             foreach ($changes_to_record as $key => $change) {
-
                 $revisions[] = array(
-                    'revisionable_type'     => $this->getMorphClass(),
-                    'revisionable_id'       => $this->getKey(),
-                    'key'                   => $key,
-                    'old_value'             => array_get($this->originalData, $key),
-                    'new_value'             => $this->updatedData[$key],
-                    'user_type'             => $this->getUserType(),
-                    'user_id'               => $this->getSystemUserId(),
-                    'created_at'            => new \DateTime(),
-                    'updated_at'            => new \DateTime(),
+                    'revisionable_type' => $this->getMorphClass(),
+                    'revisionable_id'   => $this->getKey(),
+                    'key'               => $key,
+                    'old_value'         => array_get($this->originalData, $key),
+                    'new_value'         => $this->updatedData[$key],
+                    'user_type'         => $this->getUserType(),
+                    'user_id'           => $this->getSystemUserId(),
+                    'created_at'        => new \DateTime(),
+                    'updated_at'        => new \DateTime(),
                 );
-
             }
 
             if (count($revisions) > 0) {
@@ -156,31 +157,28 @@ trait RevisionableTrait
 
         // Check if we should store creations in our revision history
         // Set this value to true in your model if you want to
-        if(empty($this->revisionCreationsEnabled))
-        {
+        if (empty($this->revisionCreationsEnabled)) {
             // We should not store creations.
             return false;
         }
 
-        if ((!isset($this->revisionEnabled) || $this->revisionEnabled))
-        {
+        if ((!isset($this->revisionEnabled) || $this->revisionEnabled)) {
             $revisions[] = array(
                 'revisionable_type' => $this->getMorphClass(),
-                'revisionable_id' => $this->getKey(),
-                'key' => self::CREATED_AT,
-                'old_value' => null,
-                'new_value' => $this->{self::CREATED_AT},
-                'user_type' => $this->getUserType(),
-                'user_id' => $this->getSystemUserId(),
-                'created_at' => new \DateTime(),
-                'updated_at' => new \DateTime(),
+                'revisionable_id'   => $this->getKey(),
+                'key'               => self::CREATED_AT,
+                'old_value'         => null,
+                'new_value'         => $this->{self::CREATED_AT},
+                'user_type'         => $this->getUserType(),
+                'user_id'           => $this->getSystemUserId(),
+                'created_at'        => new \DateTime(),
+                'updated_at'        => new \DateTime(),
             );
 
             $revision = new Revision;
             \DB::table($revision->getTable())->insert($revisions);
             \Event::fire('revisionable.created', array('model' => $this, 'revisions' => $revisions));
         }
-
     }
 
     /**
@@ -194,14 +192,14 @@ trait RevisionableTrait
         ) {
             $revisions[] = array(
                 'revisionable_type' => $this->getMorphClass(),
-                'revisionable_id' => $this->getKey(),
-                'key' => $this->getDeletedAtColumn(),
-                'old_value' => null,
-                'new_value' => $this->{$this->getDeletedAtColumn()},
-                'user_type' => $this->getUserType(),
-                'user_id' => $this->getSystemUserId(),
-                'created_at' => new \DateTime(),
-                'updated_at' => new \DateTime(),
+                'revisionable_id'   => $this->getKey(),
+                'key'               => $this->getDeletedAtColumn(),
+                'old_value'         => null,
+                'new_value'         => $this->{$this->getDeletedAtColumn()},
+                'user_type'         => $this->getUserType(),
+                'user_id'           => $this->getSystemUserId(),
+                'created_at'        => new \DateTime(),
+                'updated_at'        => new \DateTime(),
             );
             $revision = new \Venturecraft\Revisionable\Revision;
             \DB::table($revision->getTable())->insert($revisions);
@@ -217,9 +215,9 @@ trait RevisionableTrait
     public function getSystemUserId()
     {
         try {
-            if ( !is_null($multi = app('config')->get('auth.multi')) ) {
+            if (!is_null($multi = app('config')->get('auth.multi'))) {
                 foreach ($multi as $user_type => $value) {
-                    if ( \Auth::$user_type()->check() ) {
+                    if (\Auth::$user_type()->check()) {
                         return \Auth::$user_type()->get()->getAuthIdentifier();
                     }
                 }
@@ -246,9 +244,9 @@ trait RevisionableTrait
     private function getUserType()
     {
         try {
-            if ( !is_null($multi = app('config')->get('auth.multi')) ) {
+            if (!is_null($multi = app('config')->get('auth.multi'))) {
                 foreach ($multi as $user_type => $value) {
-                    if ( \Auth::$user_type()->check() ) {
+                    if (\Auth::$user_type()->check()) {
                         return $user_type;
                     }
                 }
@@ -275,7 +273,6 @@ trait RevisionableTrait
      */
     private function changedRevisionableFields()
     {
-
         $changes_to_record = array();
         foreach ($this->dirtyData as $key => $value) {
             // check that the field is revisionable, and double check
@@ -293,7 +290,6 @@ trait RevisionableTrait
         }
 
         return $changes_to_record;
-
     }
 
     /**
@@ -310,8 +306,12 @@ trait RevisionableTrait
         // If it's explicitly not revisionable, return false.
         // Otherwise, if neither condition is met, only return true if
         // we aren't specifying revisionable fields.
-        if (isset($this->doKeep) && in_array($key, $this->doKeep)) return true;
-        if (isset($this->dontKeep) && in_array($key, $this->dontKeep)) return false;
+        if (isset($this->doKeep) && in_array($key, $this->doKeep)) {
+            return true;
+        }
+        if (isset($this->dontKeep) && in_array($key, $this->dontKeep)) {
+            return false;
+        }
         return empty($this->doKeep);
     }
 
@@ -323,10 +323,14 @@ trait RevisionableTrait
     private function isSoftDelete()
     {
         // check flag variable used in laravel 4.2+
-        if (isset($this->forceDeleting)) return !$this->forceDeleting;
+        if (isset($this->forceDeleting)) {
+            return !$this->forceDeleting;
+        }
 
         // otherwise, look for flag used in older versions
-        if (isset($this->softDelete)) return $this->softDelete;
+        if (isset($this->softDelete)) {
+            return $this->softDelete;
+        }
 
         return false;
     }
@@ -405,6 +409,22 @@ trait RevisionableTrait
             $this->dontKeepRevisionOf = $donts;
             unset($donts);
         }
+    }
 
+    public function wasCreatedBySystem()
+    {
+        return $this->revisionHistory
+            ->where('key', 'created_at')
+            ->where('user_type', null)
+            ->where('user_id', null)
+            ->isNotEmpty();
+    }
+
+    public function hasBeenEditedByUser()
+    {
+        return $this->revisionHistory
+            ->where('user_type', '!=', null)
+            ->where('user_id', '!=', null)
+            ->isNotEmpty();
     }
 }
