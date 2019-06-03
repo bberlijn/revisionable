@@ -55,16 +55,6 @@ trait RevisionableTrait
         });
     }
 
-    public static function boot()
-    {
-        parent::boot();
-        // This allows versions of Laravel before 4.2 to use the
-        // trait while still having boot methods in the model class.
-        if (! method_exists(get_called_class(), 'bootTraits')) {
-            static::bootRevisionableTrait();
-        }
-    }
-
     public function revisionHistory()
     {
         return $this->morphMany('\Venturecraft\Revisionable\Revision', 'revisionable');
