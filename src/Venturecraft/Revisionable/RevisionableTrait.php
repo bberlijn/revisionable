@@ -1,4 +1,8 @@
-<?php namespace Venturecraft\Revisionable;
+<?php
+
+namespace Venturecraft\Revisionable;
+
+use Illuminate\Support\Arr;
 
 /*
  * This file is part of the Revisionable package by Venture Craft
@@ -33,7 +37,6 @@ trait RevisionableTrait
      * Create the event listeners for the saving and saved events
      * This lets us save revisions whenever a save is made, no matter the
      * http method.
-     *
      */
     public static function bootRevisionableTrait()
     {
@@ -122,7 +125,7 @@ trait RevisionableTrait
                     'revisionable_type' => $this->getMorphClass(),
                     'revisionable_id'   => $this->getKey(),
                     'key'               => $key,
-                    'old_value'         => array_get($this->originalData, $key),
+                    'old_value'         => Arr::get($this->originalData, $key),
                     'new_value'         => $this->updatedData[$key],
                     'user_type'         => $this->getUserType(),
                     'user_id'           => $this->getSystemUserId(),
