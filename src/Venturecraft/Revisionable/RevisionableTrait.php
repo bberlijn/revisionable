@@ -2,6 +2,7 @@
 
 namespace Venturecraft\Revisionable;
 
+use Illuminate\Support\Arr;
 use Venturecraft\Revisionable\Traits\PivotEventTrait;
 
 /*
@@ -27,6 +28,13 @@ trait RevisionableTrait
      * @var array
      */
     protected $dirtyData = [];
+
+    /**
+     * Store model creation by default
+     *
+     * @var boolean
+     */
+    protected $revisionCreationsEnabled = true;
 
     /**
      * Create the event listeners for the saving and saved events
@@ -123,7 +131,7 @@ trait RevisionableTrait
                     'revisionable_type' => $this->getMorphClass(),
                     'revisionable_id'   => $this->getKey(),
                     'key'               => $key,
-                    'old_value'         => array_get($this->originalData, $key),
+                    'old_value'         => Arr::get($this->originalData, $key),
                     'new_value'         => $this->updatedData[$key],
                     'user_type'         => $this->getUserType(),
                     'user_id'           => $this->getSystemUserId(),
@@ -135,7 +143,7 @@ trait RevisionableTrait
             if (count($revisions) > 0) {
                 $revision = new Revision;
                 \DB::table($revision->getTable())->insert($revisions);
-                \Event::fire('revisionable.saved', array('model' => $this, 'revisions' => $revisions));
+                \Event::dispatch('revisionable.saved', array('model' => $this, 'revisions' => $revisions));
             }
         }
     }
@@ -167,7 +175,7 @@ trait RevisionableTrait
 
             $revision = new Revision;
             \DB::table($revision->getTable())->insert($revisions);
-            \Event::fire('revisionable.created', array('model' => $this, 'revisions' => $revisions));
+            \Event::dispatch('revisionable.created', array('model' => $this, 'revisions' => $revisions));
         }
     }
 
@@ -193,7 +201,7 @@ trait RevisionableTrait
             ];
             $revision = new \Venturecraft\Revisionable\Revision;
             \DB::table($revision->getTable())->insert($revisions);
-            \Event::fire('revisionable.deleted', array('model' => $this, 'revisions' => $revisions));
+            \Event::dispatch('revisionable.deleted', array('model' => $this, 'revisions' => $revisions));
         }
     }
 
@@ -456,5 +464,22 @@ trait RevisionableTrait
             $this->dontKeepRevisionOf = $donts;
             unset($donts);
         }
+    }
+
+    public function wasCreatedBySystem()
+    {
+        return $this->revisionHistory
+            ->where('key', 'created_at')
+            ->where('user_type', null)
+            ->where('user_id', null)
+            ->isNotEmpty();
+    }
+
+    public function hasBeenEditedByUser()
+    {
+        return $this->revisionHistory
+            ->where('user_type', '!=', null)
+            ->where('user_id', '!=', null)
+            ->isNotEmpty();
     }
 }

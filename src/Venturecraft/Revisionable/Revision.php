@@ -1,7 +1,10 @@
-<?php namespace Venturecraft\Revisionable;
+<?php
 
-use Illuminate\Support\Facades\Log;
+namespace Venturecraft\Revisionable;
+
 use Illuminate\Database\Eloquent\Model as Eloquent;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Revision
@@ -14,7 +17,6 @@ use Illuminate\Database\Eloquent\Model as Eloquent;
 
 class Revision extends Eloquent
 {
-
     public $table = 'revisions';
 
     protected $revisionFormattedFields = array();
@@ -77,7 +79,6 @@ class Revision extends Eloquent
     public function oldValue()
     {
         return $this->getValue('old');
-
     }
 
 
@@ -90,7 +91,6 @@ class Revision extends Eloquent
     public function newValue()
     {
         return $this->getValue('new');
-
     }
 
 
@@ -102,14 +102,12 @@ class Revision extends Eloquent
      */
     private function getValue($which = 'new')
     {
-
         $which_value = $which . '_value';
 
         // First find the main model that was updated
         $main_model = $this->revisionable_type;
         // Load it, WITH the related model
-        if ( class_exists($main_model) ) {
-
+        if (class_exists($main_model)) {
             $main_model = new $main_model;
 
             try {
@@ -142,14 +140,13 @@ class Revision extends Eloquent
 
 
                     // see if there's an available mutator
-                    $mutator = 'get' . studly_case($this->key) . 'Attribute';
+                    $mutator = 'get' . Str::studly($this->key) . 'Attribute';
                     if (method_exists($item, $mutator)) {
                         return $this->format($item->$mutator($this->key), $item->identifiableName());
                     }
 
                     return $this->format($this->key, $item->identifiableName());
                 }
-
             } catch (\Exception $e) {
                 // Just a failsafe, in the case the data setup isn't as expected
                 // Nothing to do here.
@@ -159,15 +156,13 @@ class Revision extends Eloquent
             // if there was an issue
             // or, if it's a normal value
 
-            $mutator = 'get' . studly_case($this->key) . 'Attribute';
+            $mutator = 'get' . Str::studly($this->key) . 'Attribute';
             if (method_exists($main_model, $mutator)) {
                 return $this->format($this->key, $main_model->$mutator($this->$which_value));
             }
-
         }
 
         return $this->format($this->key, $this->$which_value);
-
     }
 
     /**
@@ -210,7 +205,7 @@ class Revision extends Eloquent
      */
     public function userResponsible()
     {
-        if ( !is_null($multi = app('config')->get('auth.multi')) ) {
+        if (!is_null($multi = app('config')->get('auth.multi'))) {
             $user_model = $multi[$this->user_type]['model'];
             return $user_model::find($this->user_id);
         } elseif (class_exists($class = '\Cartalyst\Sentry\Facades\Laravel\Sentry')
