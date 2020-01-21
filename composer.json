@@ -19,11 +19,15 @@
         "illuminate/support": "~5.0|~6.0"
     },
     "autoload": {
-        "classmap": [
-            "src/migrations"
-        ],
-        "psr-0": {
+        "psr-4": {
             "Venturecraft\\Revisionable": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Venturecraft\\Revisionable\\RevisionableServiceProvider"
+            ]
         }
     }
 }

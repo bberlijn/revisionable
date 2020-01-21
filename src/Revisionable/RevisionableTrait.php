@@ -251,7 +251,7 @@ trait RevisionableTrait
                     'revisionable_type' => $relation,
                     'revisionable_id'   => $relation_id,
                     'key'               => $key,
-                    'old_value'         => array_get($originalData, $key),
+                    'old_value'         => Arr::get($originalData, $key),
                     'new_value'         => $value,
                     'user_type'         => $this->getUserType(),
                     'user_id'           => $this->getSystemUserId(),
@@ -263,7 +263,7 @@ trait RevisionableTrait
             if (count($revisions) > 0) {
                 $revision = new Revision;
                 \DB::table($revision->getTable())->insert($revisions);
-                \Event::fire('revisionable.saved', array('model' => $this, 'revisions' => $revisions));
+                \Event::dispatch('revisionable.saved', array('model' => $this, 'revisions' => $revisions));
             }
         }
     }
