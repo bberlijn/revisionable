@@ -213,11 +213,8 @@ trait RevisionableTrait
      * @param  array  $attributes [description]
      * @return [type]             [description]
      */
-    public function postPivotUpdated(
-        $model,
-        $relation = null,
-        $attributes = []
-    ) {
+    public function postPivotUpdated($model, $relation = null, $attributes = [])
+    {
         $relationName = $relation->getRelationName();
         $relatedKey = $relation->getRelated()->getKeyName();
         $relation_id = array_keys($attributes)[0];
@@ -226,7 +223,13 @@ trait RevisionableTrait
         if (!isset($this->revisionEnabled) || $this->revisionEnabled) {
             $revisions = [];
 
-            $originalData = $this->$relationName->firstWhere($relatedKey, $relation_id)->pivot->toArray();
+            $pivotRelation = $this->$relationName->firstWhere($relatedKey, $relation_id);
+
+            if (!$pivotRelation) {
+                return;
+            }
+
+            $originalData = $pivotRelation->pivot->toArray();
 
             $parent = get_class($this);
             $parent_id = $this->id;
@@ -251,7 +254,7 @@ trait RevisionableTrait
                     'revisionable_type' => $relation,
                     'revisionable_id'   => $relation_id,
                     'key'               => $key,
-                    'old_value'         => array_get($originalData, $key),
+                    'old_value'         => Arr::get($originalData, $key),
                     'new_value'         => $value,
                     'user_type'         => $this->getUserType(),
                     'user_id'           => $this->getSystemUserId(),
@@ -263,7 +266,7 @@ trait RevisionableTrait
             if (count($revisions) > 0) {
                 $revision = new Revision;
                 \DB::table($revision->getTable())->insert($revisions);
-                \Event::fire('revisionable.saved', array('model' => $this, 'revisions' => $revisions));
+                \Event::dispatch('revisionable.saved', array('model' => $this, 'revisions' => $revisions));
             }
         }
     }
