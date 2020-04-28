@@ -2,6 +2,7 @@
 
 namespace Venturecraft\Revisionable;
 
+use Exception;
 use Illuminate\Database\Eloquent\Model as Eloquent;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -19,9 +20,9 @@ class Revision extends Eloquent
 {
     public $table = 'revisions';
 
-    protected $revisionFormattedFields = array();
+    protected $revisionFormattedFields = [];
 
-    public function __construct(array $attributes = array())
+    public function __construct(array $attributes = [])
     {
         parent::__construct($attributes);
     }
@@ -32,6 +33,16 @@ class Revision extends Eloquent
      * @return array revision history
      */
     public function revisionable()
+    {
+        return $this->morphTo();
+    }
+
+    /**
+     * User
+     * Grab the author of the revision
+     * @return Model
+     */
+    public function user()
     {
         return $this->morphTo();
     }
@@ -48,9 +59,8 @@ class Revision extends Eloquent
             return $formatted;
         } elseif (strpos($this->key, '_id')) {
             return str_replace('_id', '', $this->key);
-        } else {
-            return $this->key;
         }
+        return $this->key;
     }
 
     /**
@@ -81,7 +91,6 @@ class Revision extends Eloquent
         return $this->getValue('old');
     }
 
-
     /**
      * New Value
      * Grab the new value of the field, if it was a foreign key
@@ -92,7 +101,6 @@ class Revision extends Eloquent
     {
         return $this->getValue('new');
     }
-
 
     /**
      * Resposible for actually doing the grunt work for getting the
@@ -118,7 +126,7 @@ class Revision extends Eloquent
                     if (! method_exists($main_model, $related_model)) {
                         $related_model = camel_case($related_model); // for cases like published_status_id
                         if (! method_exists($main_model, $related_model)) {
-                            throw new \Exception('Relation ' . $related_model . ' does not exist for ' . $main_model);
+                            throw new Exception('Relation ' . $related_model . ' does not exist for ' . $main_model);
                         }
                     }
                     $related_class = $main_model->$related_model()->getRelated();
@@ -147,7 +155,7 @@ class Revision extends Eloquent
 
                     return $this->format($this->key, $item->identifiableName());
                 }
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 // Just a failsafe, in the case the data setup isn't as expected
                 // Nothing to do here.
                 Log::info('Revisionable: ' . $e);
@@ -205,17 +213,7 @@ class Revision extends Eloquent
      */
     public function userResponsible()
     {
-        if (!is_null($multi = app('config')->get('auth.multi'))) {
-            $user_model = $multi[$this->user_type]['model'];
-            return $user_model::find($this->user_id);
-        } elseif (class_exists($class = '\Cartalyst\Sentry\Facades\Laravel\Sentry')
-                || class_exists($class = '\Cartalyst\Sentinel\Laravel\Facades\Sentinel')) {
-            return $class::findUserById($this->user_id);
-        } else {
-            $user_model = $this->user_type;
-
-            return $user_model::find($this->user_id);
-        }
+        return $this->user;
     }
 
     /*
@@ -225,6 +223,7 @@ class Revision extends Eloquent
         'minimum'  => 'string:Min: %s'
     )
      */
+
     /**
      * Format the value according to the $revisionFormattedFields array
      *
@@ -241,8 +240,7 @@ class Revision extends Eloquent
 
         if (isset($revisionFormattedFields[$key])) {
             return FieldFormatter::format($key, $value, $revisionFormattedFields);
-        } else {
-            return $value;
         }
+        return $value;
     }
 }
