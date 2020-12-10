@@ -2,15 +2,10 @@
 
 namespace Venturecraft\Revisionable\Traits;
 
-use Illuminate\Database\Eloquent\Concerns\HasEvents;
-
 trait PivotEventTrait
 {
     use ExtendRelationsTrait;
     use ExtendFireModelEventTrait;
-    // use HasEvents {
-    //     fireModelEvent as public fireModelEvent;
-    // }
 
     /**
      * Get the observable event names.

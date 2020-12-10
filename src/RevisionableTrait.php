@@ -3,6 +3,9 @@
 namespace Venturecraft\Revisionable;
 
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Venturecraft\Revisionable\Traits\PivotEventTrait;
 
 /*
@@ -17,9 +20,13 @@ trait RevisionableTrait
     use PivotEventTrait;
 
     private $originalData;
+
     private $updatedData;
+
     private $updating;
+
     private $dontKeep = [];
+
     private $doKeep = [];
 
     /**
@@ -67,7 +74,7 @@ trait RevisionableTrait
 
     public function revisionHistory()
     {
-        return $this->morphMany('\Venturecraft\Revisionable\Revision', 'revisionable');
+        return $this->morphMany(Revision::class, 'revisionable');
     }
 
     /**
@@ -110,7 +117,6 @@ trait RevisionableTrait
         }
     }
 
-
     /**
      * Called after a model is successfully saved.
      *
@@ -133,8 +139,8 @@ trait RevisionableTrait
                     'key'               => $key,
                     'old_value'         => Arr::get($this->originalData, $key),
                     'new_value'         => $this->updatedData[$key],
-                    'user_type'         => $this->getUserType(),
-                    'user_id'           => $this->getSystemUserId(),
+                    'user_type'         => $this->getAuthenticatedUserType(),
+                    'user_id'           => $this->getAuthenticatedUserId(),
                     'created_at'        => now(),
                     'updated_at'        => now(),
                 ];
@@ -142,15 +148,15 @@ trait RevisionableTrait
 
             if (count($revisions) > 0) {
                 $revision = new Revision;
-                \DB::table($revision->getTable())->insert($revisions);
-                \Event::dispatch('revisionable.saved', array('model' => $this, 'revisions' => $revisions));
+                DB::table($revision->getTable())->insert($revisions);
+                Event::dispatch('revisionable.saved', ['model' => $this, 'revisions' => $revisions]);
             }
         }
     }
 
     /**
-    * Called after record successfully created
-    */
+     * Called after record successfully created
+     */
     public function postCreate()
     {
         // Check if we should store creations in our revision history
@@ -167,15 +173,15 @@ trait RevisionableTrait
                 'key'               => self::CREATED_AT,
                 'old_value'         => null,
                 'new_value'         => $this->{self::CREATED_AT},
-                'user_type'         => $this->getUserType(),
-                'user_id'           => $this->getSystemUserId(),
+                'user_type'         => $this->getAuthenticatedUserType(),
+                'user_id'           => $this->getAuthenticatedUserId(),
                 'created_at'        => now(),
                 'updated_at'        => now(),
             ];
 
             $revision = new Revision;
-            \DB::table($revision->getTable())->insert($revisions);
-            \Event::dispatch('revisionable.created', array('model' => $this, 'revisions' => $revisions));
+            DB::table($revision->getTable())->insert($revisions);
+            Event::dispatch('revisionable.created', ['model' => $this, 'revisions' => $revisions]);
         }
     }
 
@@ -194,29 +200,20 @@ trait RevisionableTrait
                 'key'               => $this->getDeletedAtColumn(),
                 'old_value'         => null,
                 'new_value'         => $this->{$this->getDeletedAtColumn()},
-                'user_type'         => $this->getUserType(),
-                'user_id'           => $this->getSystemUserId(),
+                'user_type'         => $this->getAuthenticatedUserType(),
+                'user_id'           => $this->getAuthenticatedUserId(),
                 'created_at'        => now(),
                 'updated_at'        => now(),
             ];
             $revision = new \Venturecraft\Revisionable\Revision;
-            \DB::table($revision->getTable())->insert($revisions);
-            \Event::dispatch('revisionable.deleted', array('model' => $this, 'revisions' => $revisions));
+            DB::table($revision->getTable())->insert($revisions);
+            Event::dispatch('revisionable.deleted', ['model' => $this, 'revisions' => $revisions]);
         }
     }
 
-    /**
-     * @todo - Cast booleans to integer
-     *       - Better name for $relation variable
-     * @param  [type] $model      [description]
-     * @param  [type] $relation   [description]
-     * @param  array  $attributes [description]
-     * @return [type]             [description]
-     */
-    public function postPivotUpdated($model, $relation = null, $attributes = [])
+    public function postPivotUpdated($parent, $related, $relationName = null, $attributes = [])
     {
-        $relationName = $relation->getRelationName();
-        $relatedKey = $relation->getRelated()->getKeyName();
+        $relatedKey = $related->getKeyName();
         $relation_id = array_keys($attributes)[0];
         $attributes = array_values($attributes)[0];
 
@@ -233,11 +230,11 @@ trait RevisionableTrait
 
             $parent = get_class($this);
             $parent_id = $this->id;
-            $relation = get_class($relation->getRelated());
+            $relation = get_class($related);
             $relation_id = $relation_id;
 
             if (strpos($this->getTable(), $relationName) !== false) {
-                $parent = get_class($relation->getRelated());
+                $parent = get_class($related);
                 $parent_id = $relation_id;
                 $relation = get_class($this);
                 $relation_id = $this->id;
@@ -256,8 +253,8 @@ trait RevisionableTrait
                     'key'               => $key,
                     'old_value'         => Arr::get($originalData, $key),
                     'new_value'         => $value,
-                    'user_type'         => $this->getUserType(),
-                    'user_id'           => $this->getSystemUserId(),
+                    'user_type'         => $this->getAuthenticatedUserType(),
+                    'user_id'           => $this->getAuthenticatedUserId(),
                     'created_at'        => now(),
                     'updated_at'        => now(),
                 ];
@@ -265,10 +262,23 @@ trait RevisionableTrait
 
             if (count($revisions) > 0) {
                 $revision = new Revision;
-                \DB::table($revision->getTable())->insert($revisions);
-                \Event::dispatch('revisionable.saved', array('model' => $this, 'revisions' => $revisions));
+                DB::table($revision->getTable())->insert($revisions);
+                Event::dispatch('revisionable.saved', ['model' => $this, 'revisions' => $revisions]);
             }
         }
+    }
+
+    private function getAuthenticatedUser()
+    {
+        $guards = array_keys(config('auth.guards'));
+
+        foreach ($guards as $guard) {
+            if (Auth::guard($guard)->check()) {
+                return Auth::guard($guard)->user();
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -276,25 +286,9 @@ trait RevisionableTrait
      * Supports Cartalyst Sentry/Sentinel based authentication, as well as stock Auth
      * MultiAuth support added
      **/
-    public function getSystemUserId()
+    public function getAuthenticatedUserId()
     {
-        try {
-            if (!is_null($multi = app('config')->get('auth.multi'))) {
-                foreach ($multi as $user_type => $value) {
-                    if (\Auth::$user_type()->check()) {
-                        return \Auth::$user_type()->get()->getAuthIdentifier();
-                    }
-                }
-            } elseif (\Auth::guard('user')->check()) {
-                return \Auth::guard('user')->user()->getAuthIdentifier();
-            } elseif (\Auth::guard('customer')->check()) {
-                return \Auth::guard('customer')->user()->getAuthIdentifier();
-            }
-        } catch (\Exception $e) {
-            return null;
-        }
-
-        return null;
+        return optional($this->getAuthenticatedUser())->getAuthIdentifier();
     }
 
     /**
@@ -302,22 +296,12 @@ trait RevisionableTrait
      * Supports Cartalyst Sentry/Sentinel based authentication, as well as stock Auth
      * MultiAuth support added
      **/
-    private function getUserType()
+    private function getAuthenticatedUserType()
     {
-        try {
-            if (!is_null($multi = app('config')->get('auth.multi'))) {
-                foreach ($multi as $user_type => $value) {
-                    if (\Auth::$user_type()->check()) {
-                        return $user_type;
-                    }
-                }
-            } elseif (\Auth::guard('user')->check()) {
-                return get_class(\Auth::guard('user')->user());
-            } elseif (\Auth::guard('customer')->check()) {
-                return get_class(\Auth::guard('customer')->user());
-            }
-        } catch (\Exception $e) {
-            return null;
+        $user = $this->getAuthenticatedUser();
+
+        if (!empty($user)) {
+            return get_class($user);
         }
 
         return null;
@@ -359,7 +343,6 @@ trait RevisionableTrait
      */
     private function isRevisionable($key)
     {
-
         // If the field is explicitly revisionable, then return true.
         // If it's explicitly not revisionable, return false.
         // Otherwise, if neither condition is met, only return true if
@@ -448,7 +431,6 @@ trait RevisionableTrait
      * Need to do the adding to array longhanded, as there's a
      * PHP bug https://bugs.php.net/bug.php?id=42030
      *
-     * @param mixed $field
      *
      * @return void
      */

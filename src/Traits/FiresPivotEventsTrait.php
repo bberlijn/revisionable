@@ -2,21 +2,19 @@
 
 namespace Venturecraft\Revisionable\Traits;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 
 trait FiresPivotEventsTrait
 {
     /**
      * Attach a model to the parent.
      *
-     * @param mixed $id
-     * @param array $attributes
      * @param bool  $touch
      */
     public function attach($ids, array $attributes = [], $touch = true)
     {
-        list($idsOnly, $idsAttributes) = $this->getIdsWithAttributes($ids, $attributes);
+        [$idsOnly, $idsAttributes] = $this->getIdsWithAttributes($ids, $attributes);
 
         $this->parent->fireModelEvent(
             'pivotAttaching',
@@ -42,7 +40,6 @@ trait FiresPivotEventsTrait
     /**
      * Detach models from the relationship.
      *
-     * @param mixed $ids
      * @param bool  $touch
      *
      * @return int
@@ -53,7 +50,7 @@ trait FiresPivotEventsTrait
             $ids = $this->query->pluck($this->query->qualifyColumn($this->relatedKey))->toArray();
         }
 
-        list($idsOnly) = $this->getIdsWithAttributes($ids);
+        [$idsOnly] = $this->getIdsWithAttributes($ids);
 
         $this->parent->fireModelEvent(
             'pivotDetaching',
@@ -77,44 +74,19 @@ trait FiresPivotEventsTrait
     /**
      * Update an existing pivot record on the table.
      *
-     * @param mixed $id
-     * @param array $attributes
      * @param bool  $touch
      *
      * @return int
      */
     public function updateExistingPivot($id, array $attributes, $touch = true)
     {
-        list($idsOnly, $idsAttributes) = $this->getIdsWithAttributes($id, $attributes);
-
-        $relation_name = $this->getRelationName();
-
-        $parent = get_class($this->related);
-        $parent_id = $id;
-        $relation = get_class($this->parent);
-        $relation_id = $this->parent->id;
-
-        if (strpos($this->getTable(), $this->getRelationName()) !== false) {
-            $parent = get_class($this->parent);
-            $parent_id = $this->parent->id;
-            $relation = get_class($this->related);
-            $relation_id = $id;
-        }
-
-        // dd($this);
-
-        // dd(
-        //     $relation,
-        //     $relation_id,
-        //     $parent,
-        //     $parent_id,
-        //     $attributes
-        // );
+        [,$idsAttributes] = $this->getIdsWithAttributes($id, $attributes);
 
         $this->parent->fireModelEvent(
             'pivotUpdating',
             true,
-            $this,
+            $this->related,
+            $this->getRelationName(),
             $idsAttributes
         );
 
@@ -123,7 +95,8 @@ trait FiresPivotEventsTrait
         $this->parent->fireModelEvent(
             'pivotUpdated',
             true,
-            $this,
+            $this->related,
+            $this->getRelationName(),
             $idsAttributes
         );
 
@@ -134,7 +107,6 @@ trait FiresPivotEventsTrait
      * Cleans the ids and ids with attributes
      * Returns an array with and array of ids and array of id => attributes.
      *
-     * @param mixed $id
      * @param array $attributes
      *
      * @return array

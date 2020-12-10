@@ -5,19 +5,14 @@ namespace Venturecraft\Revisionable\Traits;
 trait ExtendFireModelEventTrait
 {
     /**
-    * Fire the given event for the model.
-    *
-    * @param  string  $event
-    * @param  bool  $halt
-    * @return mixed
-    */
-    public function fireModelEvent(
-        $event,
-        $halt = true,
-        $relation_name = null,
-        $attributes = []
-    ) {
-        if (! isset(static::$dispatcher)) {
+     * Fire the given event for the model.
+     *
+     * @param  string  $event
+     * @param  bool  $halt
+     */
+    public function fireModelEvent($event, $halt = true, ...$additionalData)
+    {
+        if (!isset(static::$dispatcher)) {
             return true;
         }
 
@@ -34,11 +29,7 @@ trait ExtendFireModelEventTrait
             return false;
         }
 
-        $payload = [
-            $this,
-            $relation_name,
-            $attributes,
-        ];
+        $payload = [$this, ...$additionalData];
 
         return !empty($result) ? $result : static::$dispatcher->{$method}(
             "eloquent.{$event}: " . static::class,
