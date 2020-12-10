@@ -67,8 +67,8 @@ trait RevisionableTrait
             $model->postCreate();
         });
 
-        static::pivotUpdated(function ($model, $relation, $attributes) {
-            $model->postPivotUpdated($model, $relation, $attributes);
+        static::pivotUpdated(function ($model, $related, $relationName, $attributes) {
+            $model->postPivotUpdated($model, $related, $relationName, $attributes);
         });
     }
 
