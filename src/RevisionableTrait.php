@@ -43,6 +43,8 @@ trait RevisionableTrait
      */
     protected $revisionCreationsEnabled = true;
 
+    protected $revisionEnabled = true;
+
     /**
      * Create the event listeners for the saving and saved events
      * This lets us save revisions whenever a save is made, no matter the
@@ -67,8 +69,8 @@ trait RevisionableTrait
             $model->postCreate();
         });
 
-        static::pivotUpdated(function ($model, $related, $relationName, $attributes) {
-            $model->postPivotUpdated($model, $related, $relationName, $attributes);
+        static::pivotUpdated(function ($model, $relationName, $attributes) {
+            $model->postPivotUpdated($model, $relationName, $attributes);
         });
     }
 
@@ -84,37 +86,38 @@ trait RevisionableTrait
      */
     public function preSave()
     {
-        if (!isset($this->revisionEnabled) || $this->revisionEnabled) {
-            // if there's no revisionEnabled. Or if there is, if it's true
-
-            $this->originalData = $this->original;
-            $this->updatedData  = $this->attributes;
-
-            // we can only safely compare basic items,
-            // so for now we drop any object based items, like DateTime
-            foreach ($this->updatedData as $key => $val) {
-                if (gettype($val) == 'object' && ! method_exists($val, '__toString')) {
-                    unset($this->originalData[$key]);
-                    unset($this->updatedData[$key]);
-                }
-            }
-
-            // the below is ugly, for sure, but it's required so we can save the standard model
-            // then use the keep / dontkeep values for later, in the isRevisionable method
-            $this->dontKeep = isset($this->dontKeepRevisionOf) ?
-                array_merge($this->dontKeepRevisionOf, $this->dontKeep)
-                : $this->dontKeep;
-
-            $this->doKeep = isset($this->keepRevisionOf) ?
-                array_merge($this->keepRevisionOf, $this->doKeep)
-                : $this->doKeep;
-
-            unset($this->attributes['dontKeepRevisionOf']);
-            unset($this->attributes['keepRevisionOf']);
-
-            $this->dirtyData = $this->getDirty();
-            $this->updating = $this->exists;
+        // if there's no revisionEnabled. Or if there is, if it's true
+        if ($this->revisionEnabled === false) {
+            return;
         }
+
+        $this->originalData = $this->original;
+        $this->updatedData  = $this->attributes;
+
+        // we can only safely compare basic items,
+        // so for now we drop any object based items, like DateTime
+        foreach ($this->updatedData as $key => $val) {
+            if (gettype($val) == 'object' && ! method_exists($val, '__toString')) {
+                unset($this->originalData[$key]);
+                unset($this->updatedData[$key]);
+            }
+        }
+
+        // the below is ugly, for sure, but it's required so we can save the standard model
+        // then use the keep / dontkeep values for later, in the isRevisionable method
+        $this->dontKeep = isset($this->dontKeepRevisionOf) ?
+            array_merge($this->dontKeepRevisionOf, $this->dontKeep)
+            : $this->dontKeep;
+
+        $this->doKeep = isset($this->keepRevisionOf) ?
+            array_merge($this->keepRevisionOf, $this->doKeep)
+            : $this->doKeep;
+
+        unset($this->attributes['dontKeepRevisionOf']);
+        unset($this->attributes['keepRevisionOf']);
+
+        $this->dirtyData = $this->getDirty();
+        $this->updating = $this->exists;
     }
 
     /**
@@ -125,32 +128,33 @@ trait RevisionableTrait
     public function postSave()
     {
         // check if the model already exists
-        if ((!isset($this->revisionEnabled) || $this->revisionEnabled) && $this->updating) {
-            // if it does, it means we're updating
+        // if it does, it means we're updating
+        if ($this->revisionEnabled === false || $this->updating === false) {
+            return;
+        }
 
-            $changes_to_record = $this->changedRevisionableFields();
+        $changes_to_record = $this->changedRevisionableFields();
 
-            $revisions = [];
+        $revisions = [];
 
-            foreach ($changes_to_record as $key => $change) {
-                $revisions[] = [
-                    'revisionable_type' => $this->getMorphClass(),
-                    'revisionable_id'   => $this->getKey(),
-                    'key'               => $key,
-                    'old_value'         => Arr::get($this->originalData, $key),
-                    'new_value'         => $this->updatedData[$key],
-                    'user_type'         => $this->getAuthenticatedUserType(),
-                    'user_id'           => $this->getAuthenticatedUserId(),
-                    'created_at'        => now(),
-                    'updated_at'        => now(),
-                ];
-            }
+        foreach ($changes_to_record as $key => $change) {
+            $revisions[] = [
+                'revisionable_type' => $this->getMorphClass(),
+                'revisionable_id'   => $this->getKey(),
+                'key'               => $key,
+                'old_value'         => Arr::get($this->originalData, $key),
+                'new_value'         => Arr::get($this->updatedData, $key),
+                'user_type'         => $this->getAuthenticatedUserType(),
+                'user_id'           => $this->getAuthenticatedUserId(),
+                'created_at'        => now(),
+                'updated_at'        => now(),
+            ];
+        }
 
-            if (count($revisions) > 0) {
-                $revision = new Revision;
-                DB::table($revision->getTable())->insert($revisions);
-                Event::dispatch('revisionable.saved', ['model' => $this, 'revisions' => $revisions]);
-            }
+        if (count($revisions) > 0) {
+            $revision = new Revision;
+            DB::table($revision->getTable())->insert($revisions);
+            Event::dispatch('revisionable.saved', ['model' => $this, 'revisions' => $revisions]);
         }
     }
 
@@ -213,58 +217,60 @@ trait RevisionableTrait
 
     public function postPivotUpdated($parent, $related, $relationName = null, $attributes = [])
     {
+        if ($this->revisionEnabled === false) {
+            return;
+        }
+
         $relatedKey = $related->getKeyName();
-        $relation_id = array_keys($attributes)[0];
-        $attributes = array_values($attributes)[0];
+        $relation_id = Arr::first(array_keys($attributes));
+        $attributes = Arr::first(array_values($attributes));
 
-        if (!isset($this->revisionEnabled) || $this->revisionEnabled) {
-            $revisions = [];
+        $revisions = [];
 
-            $pivotRelation = $this->$relationName->firstWhere($relatedKey, $relation_id);
+        $pivotRelation = $this->$relationName->firstWhere($relatedKey, $relation_id);
 
-            if (!$pivotRelation) {
-                return;
+        if (!$pivotRelation) {
+            return;
+        }
+
+        $originalData = $pivotRelation->pivot->toArray();
+
+        $parent = get_class($this);
+        $parent_id = $this->id;
+        $relation = get_class($related);
+        $relation_id = $relation_id;
+
+        if (strpos($this->getTable(), $relationName) !== false) {
+            $parent = get_class($related);
+            $parent_id = $relation_id;
+            $relation = get_class($this);
+            $relation_id = $this->id;
+        }
+
+        foreach ($attributes as $key => $value) {
+            if ($originalData[$key] === $value) {
+                continue;
             }
 
-            $originalData = $pivotRelation->pivot->toArray();
+            $revisions[] = [
+                'parent_type'       => $parent,
+                'parent_id'         => $parent_id,
+                'revisionable_type' => $relation,
+                'revisionable_id'   => $relation_id,
+                'key'               => $key,
+                'old_value'         => Arr::get($originalData, $key),
+                'new_value'         => $value,
+                'user_type'         => $this->getAuthenticatedUserType(),
+                'user_id'           => $this->getAuthenticatedUserId(),
+                'created_at'        => now(),
+                'updated_at'        => now(),
+            ];
+        }
 
-            $parent = get_class($this);
-            $parent_id = $this->id;
-            $relation = get_class($related);
-            $relation_id = $relation_id;
-
-            if (strpos($this->getTable(), $relationName) !== false) {
-                $parent = get_class($related);
-                $parent_id = $relation_id;
-                $relation = get_class($this);
-                $relation_id = $this->id;
-            }
-
-            foreach ($attributes as $key => $value) {
-                if ($originalData[$key] === $value) {
-                    continue;
-                }
-
-                $revisions[] = [
-                    'parent_type'       => $parent,
-                    'parent_id'         => $parent_id,
-                    'revisionable_type' => $relation,
-                    'revisionable_id'   => $relation_id,
-                    'key'               => $key,
-                    'old_value'         => Arr::get($originalData, $key),
-                    'new_value'         => $value,
-                    'user_type'         => $this->getAuthenticatedUserType(),
-                    'user_id'           => $this->getAuthenticatedUserId(),
-                    'created_at'        => now(),
-                    'updated_at'        => now(),
-                ];
-            }
-
-            if (count($revisions) > 0) {
-                $revision = new Revision;
-                DB::table($revision->getTable())->insert($revisions);
-                Event::dispatch('revisionable.saved', ['model' => $this, 'revisions' => $revisions]);
-            }
+        if (count($revisions) > 0) {
+            $revision = new Revision;
+            DB::table($revision->getTable())->insert($revisions);
+            Event::dispatch('revisionable.saved', ['model' => $this, 'revisions' => $revisions]);
         }
     }
 
@@ -282,19 +288,15 @@ trait RevisionableTrait
     }
 
     /**
-     * Attempt to find the user id of the currently logged in user
-     * Supports Cartalyst Sentry/Sentinel based authentication, as well as stock Auth
-     * MultiAuth support added
+     * Attempt to find the user id of the currently authenticated user
      **/
-    public function getAuthenticatedUserId()
+    private function getAuthenticatedUserId()
     {
         return optional($this->getAuthenticatedUser())->getAuthIdentifier();
     }
 
     /**
-     * Attempt to find the user type of the currently logged in user
-     * Supports Cartalyst Sentry/Sentinel based authentication, as well as stock Auth
-     * MultiAuth support added
+     * Attempt to find the user type of the currently authenticated user
      **/
     private function getAuthenticatedUserType()
     {

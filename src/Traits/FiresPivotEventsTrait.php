@@ -85,7 +85,6 @@ trait FiresPivotEventsTrait
         $this->parent->fireModelEvent(
             'pivotUpdating',
             true,
-            $this->related,
             $this->getRelationName(),
             $idsAttributes
         );
@@ -95,7 +94,6 @@ trait FiresPivotEventsTrait
         $this->parent->fireModelEvent(
             'pivotUpdated',
             true,
-            $this->related,
             $this->getRelationName(),
             $idsAttributes
         );
