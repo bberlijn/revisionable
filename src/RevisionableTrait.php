@@ -215,13 +215,14 @@ trait RevisionableTrait
         }
     }
 
-    public function postPivotUpdated($parent, $related, $relationName = null, $attributes = [])
+    public function postPivotUpdated($model, $relationName = null, $attributes = [])
     {
         if ($this->revisionEnabled === false) {
             return;
         }
 
-        $relatedKey = $related->getKeyName();
+        $relation = $model->$relationName()->getRelated();
+        $relatedKey = $relation->getKeyName();
         $relation_id = Arr::first(array_keys($attributes));
         $attributes = Arr::first(array_values($attributes));
 
@@ -237,11 +238,11 @@ trait RevisionableTrait
 
         $parent = get_class($this);
         $parent_id = $this->id;
-        $relation = get_class($related);
+        $relation = get_class($relation);
         $relation_id = $relation_id;
 
         if (strpos($this->getTable(), $relationName) !== false) {
-            $parent = get_class($related);
+            $parent = get_class($relation);
             $parent_id = $relation_id;
             $relation = get_class($this);
             $relation_id = $this->id;
